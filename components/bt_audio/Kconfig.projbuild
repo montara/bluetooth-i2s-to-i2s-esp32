@@ -1,0 +1,9 @@
+menu "Bluetooth audio"
+
+    config BT_AUDIO_DEVICE_NAME
+        string "Bluetooth device name"
+        default "ESP32 DAC"
+        help
+            The name phones will show when pairing.
+
+endmenu

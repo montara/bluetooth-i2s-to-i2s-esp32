@@ -1,0 +1,6 @@
+# Name,   Type, SubType, Offset,  Size,     Flags
+# Bluedroid + LVGL is a large image; 2.5 MB of app space leaves plenty of headroom
+# on a 4 MB module while keeping room to add an OTA layout later.
+nvs,      data, nvs,     ,        0x6000,
+phy_init, data, phy,     ,        0x1000,
+factory,  app,  factory, ,        0x280000,

@@ -1,0 +1,56 @@
+# ---------------------------------------------------------------------------
+# Target / flash
+# ---------------------------------------------------------------------------
+CONFIG_IDF_TARGET="esp32"
+CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
+CONFIG_ESPTOOLPY_FLASHMODE_QIO=y
+CONFIG_ESPTOOLPY_FLASHFREQ_80M=y
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+
+# ---------------------------------------------------------------------------
+# Performance
+# ---------------------------------------------------------------------------
+CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240=y
+CONFIG_FREERTOS_HZ=1000
+CONFIG_COMPILER_OPTIMIZATION_PERF=y
+
+# ---------------------------------------------------------------------------
+# Bluetooth: Classic (BR/EDR) only.
+#
+# BLE is explicitly disabled -- it costs tens of KB of RAM we do not have on a
+# WROOM-32 once Bluedroid, LVGL and the audio buffers are all resident, and this
+# design has no use for it.
+#
+# BT_A2DP_USE_EXTERNAL_CODEC is left at its default (n) on purpose: that keeps
+# Bluedroid's *internal* SBC decoder in the build, which is what lets us receive
+# ready-made PCM via esp_a2d_sink_register_data_callback(). With it set to y we
+# would receive raw SBC frames and would have to ship our own decoder.
+# Espressif has marked the internal codec as "will be removed in the future" --
+# see components/bt_audio/bt_audio.c for the full note.
+# ---------------------------------------------------------------------------
+CONFIG_BT_ENABLED=y
+CONFIG_BT_BLUEDROID_ENABLED=y
+CONFIG_BT_CLASSIC_ENABLED=y
+CONFIG_BT_A2DP_ENABLE=y
+CONFIG_BT_A2DP_USE_EXTERNAL_CODEC=n
+CONFIG_BT_SPP_ENABLED=n
+CONFIG_BT_BLE_ENABLED=n
+CONFIG_BTDM_CTRL_MODE_BR_EDR_ONLY=y
+CONFIG_BTDM_CTRL_MODE_BLE_ONLY=n
+CONFIG_BTDM_CTRL_MODE_BTDM=n
+
+# ---------------------------------------------------------------------------
+# LVGL
+# ---------------------------------------------------------------------------
+CONFIG_LV_COLOR_DEPTH_16=y
+CONFIG_LV_FONT_MONTSERRAT_14=y
+CONFIG_LV_FONT_MONTSERRAT_20=y
+CONFIG_LV_FONT_MONTSERRAT_28=y
+CONFIG_LV_USE_PERF_MONITOR=n
+CONFIG_LV_USE_MEM_MONITOR=n
+
+# ---------------------------------------------------------------------------
+# Console
+# ---------------------------------------------------------------------------
+CONFIG_ESP_CONSOLE_UART_DEFAULT=y

@@ -1,0 +1,7 @@
+dependencies:
+  lvgl/lvgl: "^9"
+  espressif/esp_lvgl_port: "^2.9"
+  # ILI9341 is the controller on most 2.4" SPI modules. ST7789 is the other
+  # common one and is built into esp_lcd itself, so switching needs no new
+  # dependency -- see CONFIG_UI_PANEL_* in Kconfig.projbuild.
+  espressif/esp_lcd_ili9341: "^2.1"

@@ -1,0 +1,7 @@
+dependencies:
+  # v5.5 is the floor, not a preference:
+  #   * i2s_channel_tune_rate() -- the drift-correction primitive the whole
+  #     passthrough depends on -- was added in v5.5 and does not exist in v5.4.
+  #   * esp_a2d_sink_register_data_callback() (decoded PCM) still exists in
+  #     v5.5 via esp_a2dp_legacy_api.h, which esp_a2dp_api.h pulls in.
+  idf: ">=5.5"

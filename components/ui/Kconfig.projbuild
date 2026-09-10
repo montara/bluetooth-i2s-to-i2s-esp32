@@ -1,0 +1,39 @@
+menu "DAC user interface"
+
+    choice UI_PANEL
+        prompt "TFT panel controller"
+        default UI_PANEL_ILI9341
+        help
+            Which controller the 2.4" SPI module uses. ILI9341 is by far the
+            most common; ST7789 shows up on some 240x320 modules. If the display
+            stays blank or the colours are inverted, this is the first thing to
+            check -- the modules are not visually distinguishable.
+
+        config UI_PANEL_ILI9341
+            bool "ILI9341"
+
+        config UI_PANEL_ST7789
+            bool "ST7789"
+    endchoice
+
+    config UI_PANEL_INVERT_COLOR
+        bool "Invert panel colours"
+        default n
+        help
+            Some panels ship with inverted colour polarity. Symptom is a
+            photographic negative, not a blank screen.
+
+    config UI_LVGL_BUFFER_LINES
+        int "LVGL draw buffer height (lines)"
+        default 40
+        range 10 320
+        help
+            Two buffers of this many lines are allocated in internal DMA-capable
+            RAM. At 240px wide and 16bpp that is 480 bytes per line per buffer,
+            so 40 lines costs about 38 KB for the pair.
+
+            This is the first dial to turn if the ESP32-WROOM-32 runs out of
+            internal RAM once Bluetooth connects: dropping to 20 lines halves
+            it, at the cost of more, smaller SPI transfers.
+
+endmenu
