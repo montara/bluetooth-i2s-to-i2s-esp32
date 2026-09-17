@@ -2,7 +2,8 @@
   "workbench.colorTheme": "Bearded Theme Black & Gold",
   "idf.currentSetup": "/home/ttedford/.espressif/v5.5.5/esp-idf",
   "idf.customExtraVars": {
-    "IDF_TARGET": "esp32"
+    "IDF_TARGET": "esp32",
+    "ADF_PATH": "/home/ttedford/.espressif/tools/esp-adf"
   },
   "clangd.path": "/home/ttedford/.espressif/tools/esp-clang/esp-19.1.2_20250312/esp-clang/bin/clangd",
   "clangd.arguments": [
