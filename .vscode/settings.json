@@ -1,3 +1,18 @@
 {
-    "workbench.colorTheme": "Bearded Theme Black & Gold"
+  "workbench.colorTheme": "Bearded Theme Black & Gold",
+  "idf.currentSetup": "/home/ttedford/.espressif/v5.5.5/esp-idf",
+  "idf.customExtraVars": {
+    "IDF_TARGET": "esp32"
+  },
+  "clangd.path": "/home/ttedford/.espressif/tools/esp-clang/esp-19.1.2_20250312/esp-clang/bin/clangd",
+  "clangd.arguments": [
+    "--background-index",
+    "--query-driver=**",
+    "--compile-commands-dir=/home/ttedford/Documents/Projects/bluetooth-i2s-to-i2s-esp32/build/default"
+  ],
+  "idf.openOcdConfigs": [
+    "board/esp32-wrover-kit-3.3v.cfg"
+  ],
+  "idf.flashType": "UART",
+  "idf.port": "/dev/ttyUSB0"
 }

@@ -42,8 +42,20 @@ CONFIG_BTDM_CTRL_MODE_BTDM=n
 
 # ---------------------------------------------------------------------------
 # LVGL
+#
+# LV_USE_CLIB_MALLOC (rather than the default LV_USE_BUILTIN_MALLOC) is not a
+# style choice: the built-in allocator reserves a static LV_MEM_SIZE_KILOBYTES
+# pool (64 KB by default) in BSS unconditionally, sized for the worst case
+# rather than what this UI actually uses. On a WROOM-32 with Bluedroid also
+# resident, that 64 KB fixed reservation is what pushed the image over the
+# DRAM budget at link time -- overflowing by 96 bytes with the default. Routing
+# LVGL's internal allocations (object structs, styles -- separate from the
+# draw buffers, which esp_lvgl_port already puts on the heap) through the C
+# library malloc instead means it only takes what a two-screen UI actually
+# needs, which is a small fraction of 64 KB.
 # ---------------------------------------------------------------------------
 CONFIG_LV_COLOR_DEPTH_16=y
+CONFIG_LV_USE_CLIB_MALLOC=y
 CONFIG_LV_FONT_MONTSERRAT_14=y
 CONFIG_LV_FONT_MONTSERRAT_20=y
 CONFIG_LV_FONT_MONTSERRAT_28=y

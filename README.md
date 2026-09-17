@@ -39,6 +39,10 @@ Requires **ESP-IDF v5.5 or newer**. This is a hard floor, for one reason:
 `i2s_channel_tune_rate()`, which the drift correction depends on entirely, was
 added in v5.5 and does not exist in v5.4.
 
+Builds clean on v5.5.5 — full project, both components' host tests, `idf.py
+build` through to a linked, sized `.bin` — as of the commit that added this
+line.
+
 ```bash
 git clone -b v5.5.3 --recursive https://github.com/espressif/esp-idf.git ~/esp/esp-idf
 ~/esp/esp-idf/install.sh esp32
@@ -47,6 +51,11 @@ git clone -b v5.5.3 --recursive https://github.com/espressif/esp-idf.git ~/esp/e
 idf.py set-target esp32
 idf.py build flash monitor
 ```
+
+If `export.sh` reports its Python virtual environment missing (a fresh
+`~/.espressif` tree without one, or a system Python upgrade that outdated the
+old one), re-run `~/esp/esp-idf/install.sh esp32` — it rebuilds just that venv
+without touching the toolchain or any downloaded components.
 
 Configurable bits live under `idf.py menuconfig` → *DAC user interface* (panel
 controller, colour inversion, LVGL buffer size) and *Bluetooth audio* (device
@@ -129,11 +138,30 @@ Work in this order — each step depends on the one before actually working:
   land shifted by one BCLK. If a known tone arrives recognisable but distorted,
   or the channels are swapped, suspect `slot_cfg.bit_shift` / `left_align` in
   `components/i2s_in/i2s_in.c` before looking anywhere else.
-- **RAM is the binding constraint**, not CPU. A WROOM-32 has no PSRAM and
-  Bluedroid wants 110–160 KB once connected. `heap` after a BT connect is the
-  number that matters. If it is tight, in order: drop
+- **RAM is the binding constraint**, not CPU — this one is confirmed, not just
+  anticipated. The stock LVGL Kconfig defaults (`LV_USE_BUILTIN_MALLOC`) reserve
+  a **static 64 KB pool in BSS**, sized for the worst case regardless of what
+  the UI actually uses — on a WROOM-32 with Bluedroid also resident, that alone
+  overflowed the DRAM segment at link time by 96 bytes. `sdkconfig.defaults`
+  now sets `CONFIG_LV_USE_CLIB_MALLOC=y`, which routes LVGL's internal
+  allocations through the general heap instead; the build now links with
+  **65 KB of DRAM free (47.5 % used)**. This is *static* headroom for the heap,
+  not a guarantee against runtime pressure — `heap` after a BT connect is still
+  the number to watch, since Bluedroid takes 110–160 KB from that same pool
+  once a phone is connected and streaming. If it does get tight, in order: drop
   `CONFIG_UI_LVGL_BUFFER_LINES` to 20, shorten `RING_FRAMES`, then reduce
   Bluedroid's ACL buffer counts.
+- **A managed component (`idf_component.yml`) dependency used only inside a
+  public header must be a public `REQUIRES`, not left to auto-injection.**
+  `ui_input.h` includes `lvgl.h` and exposes `lv_indev_t`/`lv_group_t` in its
+  API; the component manager auto-adds an `idf_component.yml` dependency as a
+  *private* requirement of the component that declares it, which is enough for
+  that component's own `.c` file but does not propagate to anything that merely
+  includes its header. `main.c` calling `ui_input_init()` was one such
+  consumer, and failed to compile with `lvgl.h: No such file or directory`
+  until `components/ui_input/CMakeLists.txt` listed `lvgl__lvgl` in `REQUIRES`
+  explicitly. The rule of thumb: if a public header pulls in a dependency's
+  types, that dependency has to be public too.
 - **The A2DP PCM callback is a legacy path.** `esp_a2d_sink_register_data_callback()`
   moved to `esp_a2dp_legacy_api.h` in v5.5 and Espressif has said the internal
   SBC decoder will eventually be removed. The migration, if it comes, is
