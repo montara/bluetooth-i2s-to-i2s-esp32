@@ -15,26 +15,24 @@ The design assumes a DAC that needs **no MCLK** (PCM5102A, MAX98357A and
 similar derive everything from BCLK). That is what frees GPIO0/1/3 — the only
 pins the ESP32 can emit MCLK on — and lets GPIO1/3 stay on the serial console.
 
-| Function | GPIO | Color(s) | Notes |
-|---|---|---|
-| I2S in BCLK | 34 | input-only pin |
-| I2S in WS | 35 | input-only; also feeds PCNT for rate detection |
-| I2S in DATA | 36 | input-only (SENSOR_VP) |
-| I2S out BCLK | 26 | |
-| I2S out WS | 25 | |
-| I2S out DATA | 22 | |
-
-| TFT SCLK | 18 | Blue | VSPI (SPI3) |
-| TFT MOSI | 23 | Yellow | VSPI (SPI3) |
-| TFT CS  | 5  | Green | " |
-| TFT DC  | 21 | Red | " |
-| TFT RST | 19 | Black | " |
-| TFT backlight | 4 | White | on/off; LEDC-capable for dimming later |
-
-| EC11 A | 32 | Yellow | hardware quadrature via PCNT |
-| EC11 B | 33 | Green | hardware quadrature via PCNT |
-| EC11 push (select) | 27 | Blue | to ground, internal pull-up |
-| Back button | 14 | White | to ground, internal pull-up |
+| Function           | GPIO | Color(s) | Notes                                          |
+| ------------------ | ---- | -------- | ---------------------------------------------- |
+| I2S in BCLK        | 34   | $${\color{lightblue}Blue}$$ | input-only pin |
+| I2S in WS          | 35   | $${\color{green}Green}$$    | input-only; also feeds PCNT for rate detection |
+| I2S in DATA        | 36   | $${\color{yellow}Yellow}$$   | input-only (SENSOR_VP)                         |
+| I2S out BCLK       | 26   | $${\color{lightblue}Blue}$$ | output                                         |
+| I2S out WS         | 25   | $${\color{green}Green}$$    | output                                         |
+| I2S out DATA       | 22   | $${\color{yellow}Yellow}$$   | output                                         |
+| TFT SCLK           | 18   | $${\color{lightblue}Blue}$$ | VSPI (SPI3)                                    |
+| TFT MOSI           | 23   | $${\color{yellow}Yellow}$$   | VSPI (SPI3)                                    |
+| TFT CS             | 5    | $${\color{green}Green}$$    | "                                              |
+| TFT DC             | 21   | $${\color{red}Red}$$        | "                                              |
+| TFT RST            | 19   | $${\color{grey}Black}$$      | "                                              |
+| TFT backlight      | 4    | $${\color{white}White}$$    | on/off; LEDC-capable for dimming later         |
+| EC11 A             | 32   | $${\color{yellow}Yellow}$$   | hardware quadrature via PCNT                   |
+| EC11 B             | 33   | $${\color{green}Green}$$    | hardware quadrature via PCNT                   |
+| EC11 push (select) | 27   | $${\color{lightblue}Blue}$$ | to ground, internal pull-up                    |
+| Back button        | 14   | $${\color{white}White}$$      | to ground, internal pull-up                    |
 
 The ESP32 is the **slave** on the I2S input — the external source drives BCLK
 and WS. Buttons wire to ground; no external pull-ups needed.
@@ -45,8 +43,7 @@ Requires **ESP-IDF v5.5 or newer**. This is a hard floor, for one reason:
 `i2s_channel_tune_rate()`, which the drift correction depends on entirely, was
 added in v5.5 and does not exist in v5.4.
 
-Builds clean on v5.5.5 — full project, both components' host tests, `idf.py
-build` through to a linked, sized `.bin` — as of the commit that added this
+Builds clean on v5.5.5 — full project, both components' host tests, `idf.py build` through to a linked, sized `.bin` — as of the commit that added this
 line.
 
 ```bash
@@ -70,7 +67,7 @@ name).
 ## How it works
 
 ```
- I2S in (I2S0 slave) ─┐
+I2S in (I2S0 slave) ─┐
    + PCNT rate detect ├─► audio_router ─► elastic buffer ─► I2S1 master ─► DAC
  A2DP sink (BT) ──────┘        │              ▲
                                │              └── drift servo
@@ -158,7 +155,7 @@ Work in this order — each step depends on the one before actually working:
   `CONFIG_UI_LVGL_BUFFER_LINES` to 20, shorten `RING_FRAMES`, then reduce
   Bluedroid's ACL buffer counts.
 - **A managed component (`idf_component.yml`) dependency used only inside a
-  public header must be a public `REQUIRES`, not left to auto-injection.**
+public header must be a public `REQUIRES`, not left to auto-injection.**
   `ui_input.h` includes `lvgl.h` and exposes `lv_indev_t`/`lv_group_t` in its
   API; the component manager auto-adds an `idf_component.yml` dependency as a
   *private* requirement of the component that declares it, which is enough for
@@ -187,13 +184,22 @@ Both build with `-Werror` under ASan and UBSan.
 
 ## Layout
 
-| Component | Responsibility |
-|---|---|
-| `board` | pin map; header-only, depended on by everything |
-| `audio_events` | event base and shared types; no logic, prevents dependency cycles |
-| `audio_out` | I2S1 master TX, elastic buffer, drift servo |
-| `i2s_in` | I2S0 slave RX, PCNT rate detection and presence |
-| `bt_audio` | A2DP sink, AVRCP, absolute volume |
-| `audio_router` | source state machine, NVS persistence |
-| `ui` / `ui_input` | LVGL screens; EC11 and buttons as an LVGL input device |
-| `console_cmds` | serial console for bring-up |
+| Component         | Responsibility                                                    |
+| ----------------- | ----------------------------------------------------------------- |
+| `board`           | pin map; header-only, depended on by everything                   |
+| `audio_events`    | event base and shared types; no logic, prevents dependency cycles |
+| `audio_out`       | I2S1 master TX, elastic buffer, drift servo                       |
+| `i2s_in`          | I2S0 slave RX, PCNT rate detection and presence                   |
+| `bt_audio`        | A2DP sink, AVRCP, absolute volume                                 |
+| `audio_router`    | source state machine, NVS persistence                             |
+| `ui` / `ui_input` | LVGL screens; EC11 and buttons as an LVGL input device            |
+| `console_cmds`    | serial console for bring-up                                       |
+
+$$
+
+$$
+
+$$
+
+$$
+
