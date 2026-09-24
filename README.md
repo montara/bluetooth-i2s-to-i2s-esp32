@@ -194,12 +194,3 @@ Both build with `-Werror` under ASan and UBSan.
 | `audio_router`    | source state machine, NVS persistence                             |
 | `ui` / `ui_input` | LVGL screens; EC11 and buttons as an LVGL input device            |
 | `console_cmds`    | serial console for bring-up                                       |
-
-$$
-
-$$
-
-$$
-
-$$
-
