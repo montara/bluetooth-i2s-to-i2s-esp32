@@ -15,7 +15,7 @@ The design assumes a DAC that needs **no MCLK** (PCM5102A, MAX98357A and
 similar derive everything from BCLK). That is what frees GPIO0/1/3 — the only
 pins the ESP32 can emit MCLK on — and lets GPIO1/3 stay on the serial console.
 
-| Function | GPIO | Color(s) | Notes |
+| Function | GPIO | Notes |
 |---|---|---|
 | I2S in BCLK | 34 | input-only pin |
 | I2S in WS | 35 | input-only; also feeds PCNT for rate detection |
@@ -23,18 +23,12 @@ pins the ESP32 can emit MCLK on — and lets GPIO1/3 stay on the serial console.
 | I2S out BCLK | 26 | |
 | I2S out WS | 25 | |
 | I2S out DATA | 22 | |
-
-| TFT SCLK | 18 | Blue | VSPI (SPI3) |
-| TFT MOSI | 23 | Yellow | VSPI (SPI3) |
-| TFT CS  | 5  | Green | " |
-| TFT DC  | 21 | Red | " |
-| TFT RST | 19 | Black | " |
-| TFT backlight | 4 | White | on/off; LEDC-capable for dimming later |
-
-| EC11 A | 32 | Yellow | hardware quadrature via PCNT |
-| EC11 B | 33 | Green | hardware quadrature via PCNT |
-| EC11 push (select) | 27 | Blue | to ground, internal pull-up |
-| Back button | 14 | White | to ground, internal pull-up |
+| TFT SCLK / MOSI | 18 / 23 | VSPI (SPI3) |
+| TFT CS / DC / RST | 5 / 21 / 19 | |
+| TFT backlight | 4 | on/off; LEDC-capable for dimming later |
+| EC11 A / B | 32 / 33 | hardware quadrature via PCNT |
+| EC11 push (select) | 27 | to ground, internal pull-up |
+| Back button | 14 | to ground, internal pull-up |
 
 The ESP32 is the **slave** on the I2S input — the external source drives BCLK
 and WS. Buttons wire to ground; no external pull-ups needed.
