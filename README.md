@@ -1,5 +1,8 @@
 # ESP32 I2S Passthrough DAC with Bluetooth
 
+>[!IMPORTANT]
+>An LLM has been used as an assistant in this project. If you don't understand the code, have a 3rd party review it.
+
 Firmware for an ESP32-based DAC that relays a wired I2S input straight to an I2S
 output DAC, and hands the DAC over to a Bluetooth A2DP stream when a phone
 connects and starts playing. A 2.4" TFT with a rotary encoder shows what is
