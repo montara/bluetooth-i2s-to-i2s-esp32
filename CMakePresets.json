@@ -12,7 +12,25 @@
       "description": "Development configuration",
       "binaryDir": "${sourceDir}/build/default",
       "cacheVariables": {
-        "SDKCONFIG": "${sourceDir}/build/default/sdkconfig"
+        "SDKCONFIG": "${sourceDir}/build/default/sdkconfig",
+        "IDF_TARGET": "esp32"
+      },
+      "vendor": {
+        "espressif/vscode-esp-idf": {
+          "schemaVersion": 1,
+          "settings": [
+            {
+              "type": "openOCD",
+              "value": {
+                "debugLevel": 2,
+                "configs": [
+                  "board/esp32-wrover-kit-3.3v.cfg"
+                ],
+                "args": []
+              }
+            }
+          ]
+        }
       }
     },
     {

@@ -10,6 +10,7 @@
 #include "esp_heap_caps.h"
 #include "esp_event.h"
 #include "esp_timer.h"
+#include "clk_ctrl_os.h"
 
 #include "audio_out.h"
 #include "frame_ring.h"
@@ -150,6 +151,44 @@ esp_err_t audio_out_init(void)
 
     i2s_std_config_t std_cfg = make_std_cfg(s_rate);
     ESP_RETURN_ON_ERROR(i2s_channel_init_std_mode(s_tx, &std_cfg), TAG, "init_std_mode");
+
+    /*
+     * Hold our own, extra APLL reference for the life of this channel. This is
+     * a workaround for a real bug in i2s_channel_tune_rate() (confirmed against
+     * IDF v5.5.5, components/esp_driver_i2s/i2s_common.c), not a defensive
+     * habit -- without it, the servo crashes on its very first tick.
+     *
+     * i2s_channel_init_std_mode() above already called periph_rtc_apll_acquire()
+     * for us because our clock source is APLL, so the refcount is already 1.
+     * But i2s_channel_tune_rate()'s APLL branch does, every time it runs:
+     *
+     *     periph_rtc_apll_release();               // ref--
+     *     handle->sclk_hz = i2s_set_get_apll_freq(new_mclk);   // -> periph_rtc_apll_freq_set()
+     *     periph_rtc_apll_acquire();                // ref++
+     *
+     * periph_rtc_apll_freq_set() itself asserts `s_apll_ref_cnt > 0` on entry.
+     * When we are the only APLL consumer in the system -- true here by design,
+     * since nothing else in this firmware uses APLL -- that release() drops the
+     * count 1 -> 0 (and physically powers the APLL down), so the very next line
+     * hits the assert and reboots. It is not a rare race: with a single
+     * consumer it fails on every call, on any hardware.
+     *
+     * The fix is to hold one -- exactly one -- additional reference of our own
+     * so the count never bottoms out at the driver's temporary release. With
+     * our extra ref the sequence above goes 2 -> 1 -> 2 instead of 1 -> 0 -> 1:
+     * the assert sees 1 (passes), and periph_rtc_apll_freq_set()'s own gate
+     * ("frequency may only change while refcount < 2") still sees 1 at that
+     * instant too, so the retune actually takes effect. Holding a *second*
+     * extra reference would "fix" the crash just as well but silently break
+     * the servo instead: the dip would stop at 2, that gate would then see
+     * refcount == 2 and refuse to change the frequency at all, and
+     * i2s_channel_tune_rate() would return ESP_OK having done nothing every
+     * time. So this must be exactly one acquire, never released while the
+     * servo can still run -- there is no matching release here because this
+     * channel is never torn down; a future deinit path would need to pair one
+     * periph_rtc_apll_release() with it, placed before i2s_del_channel().
+     */
+    periph_rtc_apll_acquire();
 
     ESP_LOGI(TAG, "TX ready: %" PRIu32 " Hz, ring %u frames (%u ms, %u KB)",
              s_rate, (unsigned)RING_FRAMES,
