@@ -3,7 +3,8 @@
   "idf.currentSetup": "/home/ttedford/.espressif/v5.5.5/esp-idf",
   "idf.customExtraVars": {
     "IDF_TARGET": "esp32",
-    "ADF_PATH": "/home/ttedford/.espressif/tools/esp-adf"
+    "ADF_PATH": "/home/ttedford/.espressif/tools/esp-adf",
+    "IDF_PATH": "/home/ttedford/.espressif/v5.5.5/esp-idf"
   },
   "clangd.path": "/home/ttedford/.espressif/tools/esp-clang/esp-19.1.2_20250312/esp-clang/bin/clangd",
   "clangd.arguments": [
