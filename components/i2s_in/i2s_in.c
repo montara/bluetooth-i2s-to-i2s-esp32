@@ -57,11 +57,27 @@ static volatile bool     s_present;
 static volatile bool     s_capture;
 static bool              s_rx_enabled;
 
+/* The rate we were last genuinely clocked for, independent of s_rate: s_rate
+ * goes to 0 while the source looks absent, which loses exactly the value this
+ * needs to remember. */
+static uint32_t s_last_real_rate;
+
 static uint32_t s_candidate_rate;
 static int      s_candidate_count;
 static int      s_silent_windows;
+static int      s_unrecognised_windows;
+static volatile uint32_t s_left_peak;
+static volatile uint32_t s_right_peak;
 
+static int32_t s_raw_chunk[CAPTURE_CHUNK_FRAMES * 2];
 static int16_t s_chunk[CAPTURE_CHUNK_FRAMES * 2];
+
+static i2s_std_clk_config_t make_rx_clk_cfg(uint32_t rate)
+{
+    i2s_std_clk_config_t clk = I2S_STD_CLK_DEFAULT_CONFIG(rate);
+    clk.mclk_multiple = I2S_MCLK_MULTIPLE_384;
+    return clk;
+}
 
 /* ------------------------------------------------------------------ */
 
@@ -80,6 +96,23 @@ static void apply_rate(uint32_t rate)
         return;
     }
 
+    if (old == 0 && rate == s_last_real_rate) {
+        /* Recovering from a brief dropout at the same rate we were already
+         * correctly clocked for. The RX channel's clock config never stopped
+         * being right, so skip the disable/reconfig/enable dance below --
+         * it is not free, it resets the DMA, and doing it reflexively on
+         * every noise-induced blip turns a sub-second signal glitch into an
+         * audible pop from the channel restart itself, stacked on top of
+         * whatever the glitch already cost. A source that has genuinely
+         * changed rate still falls through to the real reconfig below,
+         * because `rate == s_last_real_rate` will be false for it. */
+        s_present = true;
+        ESP_LOGI(TAG, "input recovered at %" PRIu32 " Hz", rate);
+        audio_evt_stream_t evt = { .sample_rate_hz = rate };
+        esp_event_post(AUDIO_EVENT, AUDIO_EVENT_I2S_IN_PRESENT, &evt, sizeof(evt), 0);
+        return;
+    }
+
     /* The RX channel's clock config is what the driver uses to size its own
      * internal expectations even in slave mode, so keep it honest across a rate
      * change. This needs the channel stopped, but it only happens when the
@@ -89,7 +122,7 @@ static void apply_rate(uint32_t rate)
         i2s_channel_disable(s_rx);
         s_rx_enabled = false;
     }
-    i2s_std_clk_config_t clk = I2S_STD_CLK_DEFAULT_CONFIG(rate);
+    i2s_std_clk_config_t clk = make_rx_clk_cfg(rate);
     esp_err_t err = i2s_channel_reconfig_std_clock(s_rx, &clk);
     if (err != ESP_OK) {
         ESP_LOGW(TAG, "RX re-clock to %" PRIu32 " failed: %s", rate, esp_err_to_name(err));
@@ -101,6 +134,7 @@ static void apply_rate(uint32_t rate)
     }
 
     s_present = true;
+    s_last_real_rate = rate;
     ESP_LOGI(TAG, "input %s at %" PRIu32 " Hz", old ? "changed to" : "detected", rate);
     audio_evt_stream_t evt = { .sample_rate_hz = rate };
     esp_event_post(AUDIO_EVENT, AUDIO_EVENT_I2S_IN_PRESENT, &evt, sizeof(evt), 0);
@@ -137,6 +171,7 @@ static void detect_window(void)
     if (count <= 0) {
         s_candidate_rate = 0;
         s_candidate_count = 0;
+        s_unrecognised_windows = 0;
         if (s_present && ++s_silent_windows >= DETECT_STABLE_COUNT) {
             apply_rate(0);
         }
@@ -147,14 +182,21 @@ static void detect_window(void)
     uint32_t measured = (uint32_t)(((int64_t)count * 1000000) / elapsed_us);
     uint32_t snapped = rate_table_snap(measured);
     if (snapped == 0) {
-        /* Present but unintelligible -- log once per transition, do not thrash. */
-        if (s_candidate_rate != UINT32_MAX) {
-            ESP_LOGW(TAG, "unrecognised input rate ~%" PRIu32 " Hz", measured);
-            s_candidate_rate = UINT32_MAX;
-        }
+        /* One stray window this far outside every band is unremarkable -- a
+         * source's PLL settling after a cable is plugged in, or a single noisy
+         * edge, both land here without the input actually being bad. Applying
+         * the same DETECT_STABLE_COUNT debounce used to *lock* a rate before we
+         * *warn* about one means a lone bad window says nothing; only a run of
+         * them, which a transient would not produce, does. Using `==` rather
+         * than `>=` logs exactly once per run rather than once per window. */
+        s_candidate_rate = 0;
         s_candidate_count = 0;
+        if (++s_unrecognised_windows == DETECT_STABLE_COUNT) {
+            ESP_LOGW(TAG, "unrecognised input rate ~%" PRIu32 " Hz", measured);
+        }
         return;
     }
+    s_unrecognised_windows = 0;
 
     if (snapped == s_candidate_rate) {
         if (s_candidate_count < DETECT_STABLE_COUNT) {
@@ -200,7 +242,7 @@ static void i2s_in_task(void *arg)
         }
 
         size_t read = 0;
-        esp_err_t err = i2s_channel_read(s_rx, s_chunk, sizeof(s_chunk), &read,
+        esp_err_t err = i2s_channel_read(s_rx, s_raw_chunk, sizeof(s_raw_chunk), &read,
                                          pdMS_TO_TICKS(100));
         if (err == ESP_ERR_TIMEOUT) {
             /* Slave mode with no incoming clock: expected while the source is
@@ -211,8 +253,24 @@ static void i2s_in_task(void *arg)
             ESP_LOGW(TAG, "read failed: %s", esp_err_to_name(err));
             continue;
         }
-        if (s_capture && read >= 4) {
-            audio_out_write(s_chunk, read / 4);
+        if (s_capture && read >= sizeof(int32_t) * 2) {
+            size_t sample_count = read / sizeof(s_raw_chunk[0]);
+            sample_count &= ~(size_t)1;
+            uint32_t left_peak = 0;
+            uint32_t right_peak = 0;
+            for (size_t i = 0; i < sample_count; i += 2) {
+                int32_t left = s_raw_chunk[i] >> 16;
+                int32_t right = (int16_t)(s_raw_chunk[i + 1] >> 8);
+                s_chunk[i] = (int16_t)left;
+                s_chunk[i + 1] = (int16_t)right;
+                uint32_t left_magnitude = (uint32_t)(left < 0 ? -left : left);
+                uint32_t right_magnitude = (uint32_t)(right < 0 ? -right : right);
+                if (left_magnitude > left_peak) left_peak = left_magnitude;
+                if (right_magnitude > right_peak) right_peak = right_magnitude;
+            }
+            s_left_peak = left_peak;
+            s_right_peak = right_peak;
+            audio_out_write(s_chunk, sample_count / 2);
         }
     }
 }
@@ -234,11 +292,33 @@ static esp_err_t pcnt_setup(void)
      * conflict: the ESP32 GPIO matrix fans one input pin out to as many
      * peripheral inputs as want it, so no extra wiring and no arbitration.
      *
-     * No glitch filter on this unit. WS at 192 kHz has a 2.6 us half-period, and
-     * a filter wide enough to be useful for debouncing would swallow the signal
-     * outright. (The encoder's PCNT unit does use one -- separate units,
-     * separate filters.)
+     * A short glitch filter, confirmed necessary on the bench (1V+ of noise
+     * measured on WS with a scope -- see components/i2s_in git history for the
+     * bring-up notes). The original reasoning here for omitting one entirely
+     * was wrong: it conflated "a filter wide enough to debounce a mechanical
+     * switch" (tens of microseconds, and yes, that would swallow WS at any
+     * audio rate) with "a filter that suppresses fast electrical ringing"
+     * (tens to low hundreds of nanoseconds), which is a completely different
+     * width for a completely different problem. WS's fastest real transition
+     * we support is 2.6 us (192 kHz's half-period), so a filter in the low
+     * hundreds of ns has well over 10x margin below any real edge while still
+     * collapsing a burst of noise-induced double-triggering right at a
+     * transition into the single clean edge it should have been.
+     *
+     * This only helps if the noise is fast transient ringing/overshoot, which
+     * is the common case for unterminated or poorly grounded wiring at these
+     * edge rates. It will not help a slower wobble (ground bounce, crosstalk
+     * on a timescale comparable to a real WS transition) riding on the same
+     * line -- that needs an actual electrical fix: shorter/twisted/shielded
+     * wiring, a solid common ground between the source and this board, a
+     * small series resistor at the source's output to damp reflections, or
+     * (given GPIO34-39 have no internal pull resistors, unlike every other
+     * GPIO on this chip) an external pull on WS if the line is ever left
+     * floating between transitions.
      */
+    pcnt_glitch_filter_config_t filter = { .max_glitch_ns = 200 };
+    ESP_RETURN_ON_ERROR(pcnt_unit_set_glitch_filter(s_pcnt, &filter), TAG, "glitch_filter");
+
     pcnt_chan_config_t chan_cfg = {
         .edge_gpio_num  = PIN_I2S_IN_WS,
         .level_gpio_num = -1,
@@ -270,7 +350,7 @@ esp_err_t i2s_in_init(void)
     ESP_RETURN_ON_ERROR(i2s_new_channel(&chan_cfg, NULL, &s_rx), TAG, "i2s_new_channel");
 
     i2s_std_config_t std_cfg = {
-        .clk_cfg = I2S_STD_CLK_DEFAULT_CONFIG(48000),
+        .clk_cfg = make_rx_clk_cfg(48000),
         /*
          * Philips framing to match the output side.
          *
@@ -281,7 +361,7 @@ esp_err_t i2s_in_init(void)
          * first thing to suspect -- try toggling slot_cfg.bit_shift, and check
          * left_align, before going looking for bugs anywhere else.
          */
-        .slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT,
+        .slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_24BIT,
                                                         I2S_SLOT_MODE_STEREO),
         .gpio_cfg = {
             .mclk = I2S_GPIO_UNUSED,
@@ -292,6 +372,8 @@ esp_err_t i2s_in_init(void)
             .invert_flags = { false, false, false },
         },
     };
+    std_cfg.slot_cfg.slot_bit_width = I2S_SLOT_BIT_WIDTH_32BIT;
+    std_cfg.slot_cfg.ws_width = 32;
     ESP_RETURN_ON_ERROR(i2s_channel_init_std_mode(s_rx, &std_cfg), TAG, "init_std_mode");
 
     ESP_RETURN_ON_ERROR(pcnt_setup(), TAG, "pcnt_setup");
@@ -342,4 +424,14 @@ uint32_t i2s_in_get_rate(void)
 bool i2s_in_present(void)
 {
     return s_present;
+}
+
+void i2s_in_get_channel_peaks(uint32_t *left, uint32_t *right)
+{
+    if (left) {
+        *left = s_left_peak;
+    }
+    if (right) {
+        *right = s_right_peak;
+    }
 }

@@ -2,7 +2,7 @@ menu "DAC user interface"
 
     choice UI_PANEL
         prompt "TFT panel controller"
-        default UI_PANEL_ILI9341
+        default UI_PANEL_ST7789
         help
             Which controller the 2.4" SPI module uses. ILI9341 is by far the
             most common; ST7789 shows up on some 240x320 modules. If the display

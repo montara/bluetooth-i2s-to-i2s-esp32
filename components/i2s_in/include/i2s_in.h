@@ -39,6 +39,9 @@ uint32_t i2s_in_get_rate(void);
 /** True while WS edges are arriving. */
 bool i2s_in_present(void);
 
+/** Peak absolute sample values from the most recently captured chunk. */
+void i2s_in_get_channel_peaks(uint32_t *left, uint32_t *right);
+
 #ifdef __cplusplus
 }
 #endif

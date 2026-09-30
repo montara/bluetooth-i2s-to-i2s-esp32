@@ -5,6 +5,7 @@
 #include "freertos/task.h"
 #include "freertos/semphr.h"
 #include "driver/i2s_std.h"
+#include "driver/i2s_common.h"
 #include "esp_log.h"
 #include "esp_check.h"
 #include "esp_heap_caps.h"
@@ -23,11 +24,11 @@ static const char *TAG = "audio_out";
 /* Tunables                                                            */
 /* ------------------------------------------------------------------ */
 
-/* Power of two, as frame_ring requires. 4096 frames is ~85 ms at 48 kHz and
- * costs 16 KB -- a deliberate compromise on a WROOM-32 where Bluedroid wants
+/* Power of two, as frame_ring requires. 8192 frames is ~170 ms at 44.1 kHz and
+ * costs 32 KB -- a deliberate compromise on a WROOM-32 where Bluedroid wants
  * every byte it can get. Deeper tolerates a burstier producer; shallower means
  * less latency and less RAM. */
-#define RING_FRAMES         4096u
+#define RING_FRAMES         8192u
 
 /* How much the pump moves per I2S write. 240 frames is 5 ms at 48 kHz. */
 #define CHUNK_FRAMES        240u
@@ -65,10 +66,9 @@ static const char *TAG = "audio_out";
 #define SERVO_KP_X10        64      /* 6.4   */
 #define SERVO_KD_X10        2048    /* 204.8 */
 
-/* Ceiling on how far the servo may pull MCLK from nominal. +/-20 kHz on a
- * 12.288 MHz MCLK is +/-0.16 %, well inside what a PCM5102A-class DAC will
- * swallow and far more than the tens of ppm a real crystal mismatch needs. */
-#define SERVO_MAX_DELTA_HZ  20000
+/* Ceiling on how far the servo may pull MCLK from nominal. +/-50 kHz on a
+ * 12.288 MHz MCLK is +/-0.4 %, within the range a PCM5102A-class DAC accepts. */
+#define SERVO_MAX_DELTA_HZ  50000
 
 /* Per-tick slew limit, so a transient cannot slam the clock in one step. */
 #define SERVO_MAX_STEP_HZ   2000
@@ -328,7 +328,13 @@ esp_err_t audio_out_start(void)
     BaseType_t ok = xTaskCreatePinnedToCore(audio_out_pump_task, "aout_pump", 4096, NULL, 23, NULL, 1);
     ESP_RETURN_ON_FALSE(ok == pdPASS, ESP_ERR_NO_MEM, TAG, "pump task");
 
-    ok = xTaskCreatePinnedToCore(audio_out_servo_task, "aout_servo", 3072, NULL, 5, NULL, 1);
+    /* 3072 was tight for a task that calls into the I2S driver's clock-tuning
+     * path (mutexes, HAL register writes, its own logging) and occasionally
+     * takes the resync branch with an ESP_LOGW on top. Bumping this is cheap
+     * insurance, not a diagnosed fix for anything specific -- pair with
+     * CONFIG_FREERTOS_WATCHPOINT_END_OF_STACK (sdkconfig.defaults) to get a
+     * precise panic if this task's stack is ever actually the problem. */
+    ok = xTaskCreatePinnedToCore(audio_out_servo_task, "aout_servo", 4096, NULL, 5, NULL, 1);
     ESP_RETURN_ON_FALSE(ok == pdPASS, ESP_ERR_NO_MEM, TAG, "servo task");
 
     ESP_LOGI(TAG, "output started");

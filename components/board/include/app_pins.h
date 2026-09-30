@@ -8,7 +8,15 @@
  *     voltage and the module will not boot.)
  *   - GPIO34..39 are input-only. That is exactly what the I2S input needs, so
  *     the three incoming clock/data lines are placed there and the more
- *     valuable bidirectional pins are left for everything else.
+ *     valuable bidirectional pins are left for everything else. One real
+ *     tradeoff for that convenience: unlike every other GPIO on this chip,
+ *     34..39 have NO internal pull-up/pull-down at all. If any of these three
+ *     lines is ever left floating (a source with a weak or tri-stating output
+ *     stage, a moment of bus contention), there is nothing here to hold it at
+ *     a known level -- confirmed on the bench as a real contributor to noise
+ *     on WS during bring-up. An external pull resistor is worth trying if a
+ *     line misbehaves; see components/i2s_in/i2s_in.c for the noise mitigation
+ *     already in place on the software side.
  *   - GPIO1/GPIO3 stay on UART0 for the serial console. We can afford this only
  *     because the DAC needs no MCLK -- MCLK on ESP32 is restricted to GPIO0/1/3.
  */
