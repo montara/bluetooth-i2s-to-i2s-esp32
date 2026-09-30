@@ -70,7 +70,7 @@ name).
 ## How it works
 
 ```
-I2S in (I2S0 slave) ─┐
+ I2S in (I2S0 slave) ─┐
    + PCNT rate detect ├─► audio_router ─► elastic buffer ─► I2S1 master ─► DAC
  A2DP sink (BT) ──────┘        │              ▲
                                │              └── drift servo
