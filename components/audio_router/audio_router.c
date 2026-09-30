@@ -32,7 +32,7 @@ static const char *TAG = "router";
 #define DEBOUNCE_MS     250
 
 /* Fallback when a source is selected but has not reported a rate yet. */
-#define FALLBACK_RATE   48000
+#define FALLBACK_RATE   44800u
 
 static volatile audio_route_mode_t s_mode = AUDIO_ROUTE_AUTO;
 static volatile audio_source_t s_source = AUDIO_SRC_NONE;

@@ -67,3 +67,22 @@ CONFIG_LV_USE_MEM_MONITOR=n
 # Console
 # ---------------------------------------------------------------------------
 CONFIG_ESP_CONSOLE_UART_DEFAULT=y
+
+# ---------------------------------------------------------------------------
+# Diagnostics
+#
+# Canary-byte stack checking (CONFIG_FREERTOS_CHECK_STACKOVERFLOW_CANARY) is
+# already the IDF default and stays on. This adds the hardware watchpoint
+# method alongside it: canary bytes are only inspected at a context switch, so
+# a task that overflows and then yields *after* the corruption has already
+# happened can still produce a clean-looking panic pointing at the wrong task,
+# or in a marginal case, no panic at all if nothing that reads the canary
+# region runs before the memory is overwritten back to something benign. The
+# watchpoint traps at the exact instruction that writes past the last 32 bytes
+# of a task's stack, which turns "occasional garbled log output, cause
+# unknown" into a precise backtrace naming the task and PC -- worth having
+# given the cost is one HW watchpoint register (unused otherwise here) and up
+# to 60 bytes of stack per task, trivial against the ~65 KB DRAM headroom this
+# build has after the LVGL fix above.
+# ---------------------------------------------------------------------------
+CONFIG_FREERTOS_WATCHPOINT_END_OF_STACK=y

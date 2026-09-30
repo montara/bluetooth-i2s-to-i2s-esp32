@@ -13,7 +13,8 @@
     "--compile-commands-dir=/home/ttedford/Documents/Projects/bluetooth-i2s-to-i2s-esp32/build/default"
   ],
   "idf.openOcdConfigs": [
-    "board/esp32-wrover-kit-3.3v.cfg"
+    "interface/ftdi/esp_ftdi.cfg",
+    "target/esp32.cfg"
   ],
   "idf.flashType": "UART",
   "idf.port": "/dev/ttyUSB0",

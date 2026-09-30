@@ -70,6 +70,11 @@ static int cmd_stats(int argc, char **argv)
         printf(", %" PRIu32 " Hz", i2s_in_get_rate());
     }
     printf("\n");
+    uint32_t left_peak = 0;
+    uint32_t right_peak = 0;
+    i2s_in_get_channel_peaks(&left_peak, &right_peak);
+    printf("i2s peaks: L=%" PRIu32 " R=%" PRIu32 " (16-bit magnitude)\n",
+           left_peak, right_peak);
     printf("bluetooth: %s", bt_audio_is_connected() ? "connected" : "disconnected");
     if (bt_audio_is_connected()) {
         printf(" to %s, %s, %" PRIu32 " Hz, volume %u%%",
